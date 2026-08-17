@@ -75,7 +75,7 @@ As fotos ficam embutidas no próprio `index.html` (em base64), então não há a
 
 ## Privacidade
 
-Todo o processamento acontece no navegador de quem está usando o link — os arquivos Excel enviados não passam por nenhum servidor, não são armazenados em lugar nenhum. Se você fechar a aba, os dados somem; é preciso subir os arquivos de novo na próxima visita.
+Todo o processamento acontece no navegador de quem está usando o link — os arquivos Excel enviados não passam por nenhum servidor. Os dados ficam salvos no **localStorage do navegador** (só naquele dispositivo/navegador específico), então fechar a aba ou voltar depois não apaga mais nada — a última planilha importada continua lá. Para limpar, use o botão "🗑 Limpar dados salvos" na tela de upload. Como cada navegador/dispositivo tem sua própria memória local, isso não substitui um banco de dados compartilhado: se duas pessoas acessarem o link em computadores diferentes, cada uma verá os dados que ela mesma importou.
 
 ---
 

@@ -348,6 +348,7 @@ tr:hover td{background:#FAFCFE;}
     <div style="margin-top:22px; display:flex; gap:12px; align-items:center;">
       <button class="btn accent" id="btnAtualizar" onclick="runCalculation()" disabled>🔄 Atualizar Dashboard</button>
       <button class="btn secondary" onclick="openDadosImportados()">🔍 Ver Dados Importados</button>
+      <button class="btn secondary" onclick="clearStorage()" style="color:var(--red);border-color:#EFC1C1;">🗑 Limpar dados salvos</button>
       <span class="muted" id="calcStatus" style="font-size:12.5px;"></span>
     </div>
 
@@ -672,6 +673,7 @@ document.getElementById('file-involves').addEventListener('change', async (e)=>{
   updateTopbar();
   buildMappingUI();
   checkReady();
+  saveToStorage();
 });
 
 function renderImportSummaryInvolves(){
@@ -784,6 +786,7 @@ document.getElementById('file-manual').addEventListener('change', async (e)=>{
   addHistory('MANUAL', f.name, totalIndicadores, Object.keys(blocks).length+' de '+PROMOTERS.length+' promotores reconhecidos');
   updateTopbar();
   checkReady();
+  saveToStorage();
 });
 
 function renderImportSummaryManual(){
@@ -865,7 +868,7 @@ function buildMappingUI(){
       .concat(PROMOTERS.map(p=>`<option value="${p.key}" ${STATE.mapping[n]===p.key?'selected':''}>${p.nome}</option>`));
     return `<div class="map-row">
       <div>${n}</div><div style="text-align:center;color:var(--gray-500);">→</div>
-      <select onchange="STATE.mapping['${n.replace(/'/g,"\\'")}']=this.value">${opts.join('')}</select>
+      <select onchange="STATE.mapping['${n.replace(/'/g,"\\'")}']=this.value; saveToStorage();">${opts.join('')}</select>
     </div>`;
   }).join('');
 }
@@ -889,6 +892,101 @@ function toggleMetasPadrao(){
 
 function checkReady(){
   document.getElementById('btnAtualizar').disabled = !STATE.manual.blocks;
+}
+
+/* ================================================================
+   PERSISTÊNCIA LOCAL — guarda os dados no navegador (localStorage) para
+   não precisar re-subir os Excel toda vez que a página é reaberta.
+   Nada é enviado a nenhum servidor; fica só no dispositivo de quem acessa.
+================================================================= */
+const STORAGE_KEY = 'rbr_trade_dashboard_v1';
+
+function saveToStorage(){
+  try{
+    const snapshot = {
+      savedAt: new Date().toISOString(),
+      involves: (STATE.involves && STATE.involves.rows) ? {
+        filename: STATE.involves.filename,
+        uploadedAt: STATE.involves.uploadedAt ? STATE.involves.uploadedAt.toISOString() : null,
+        abaUsada: STATE.involves.abaUsada,
+        abasEncontradas: STATE.involves.abasEncontradas,
+        colunasIdentificadas: STATE.involves.colunasIdentificadas,
+        colaboradoresDetectados: STATE.involves.colaboradoresDetectados,
+        rows: STATE.involves.rows.map(r=> ({...r, dataVisita: r.dataVisita ? r.dataVisita.toISOString() : null})),
+      } : null,
+      manual: (STATE.manual && STATE.manual.blocks) ? {
+        filename: STATE.manual.filename,
+        uploadedAt: STATE.manual.uploadedAt ? STATE.manual.uploadedAt.toISOString() : null,
+        abasEncontradas: STATE.manual.abasEncontradas,
+        abasComBloco: STATE.manual.abasComBloco,
+        erros: STATE.manual.erros,
+        totalIndicadores: STATE.manual.totalIndicadores,
+        blocks: STATE.manual.blocks,
+      } : null,
+      mapping: STATE.mapping,
+      history: STATE.history.map(h=>({...h, dt: h.dt.toISOString()})),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  }catch(err){
+    console.warn('Não foi possível salvar os dados localmente:', err);
+  }
+}
+
+function clearStorage(){
+  if(!confirm('Isso apaga os dados salvos neste navegador (você vai precisar subir os Excel de novo). Confirmar?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+}
+
+function loadFromStorage(){
+  let raw;
+  try{ raw = localStorage.getItem(STORAGE_KEY); }catch(err){ return; }
+  if(!raw) return;
+  let snap;
+  try{ snap = JSON.parse(raw); }catch(err){ return; }
+
+  if(snap.involves){
+    STATE.involves = {
+      ...snap.involves,
+      uploadedAt: snap.involves.uploadedAt ? new Date(snap.involves.uploadedAt) : null,
+      rows: snap.involves.rows.map(r=> ({...r, dataVisita: r.dataVisita ? new Date(r.dataVisita) : null})),
+    };
+    document.getElementById('dz-involves').classList.add('filled');
+    document.getElementById('involves-filename').textContent = STATE.involves.filename;
+    document.getElementById('involves-count').textContent = STATE.involves.rows.length + ' linhas';
+    document.getElementById('involves-colabs').textContent = STATE.involves.colaboradoresDetectados.length;
+    document.getElementById('involves-updated').textContent = fmt.dateTimeBR(STATE.involves.uploadedAt);
+    renderImportSummaryInvolves();
+  }
+  if(snap.manual){
+    STATE.manual = { ...snap.manual, uploadedAt: snap.manual.uploadedAt ? new Date(snap.manual.uploadedAt) : null };
+    document.getElementById('dz-manual').classList.add('filled');
+    document.getElementById('manual-filename').textContent = STATE.manual.filename;
+    document.getElementById('manual-sheets').textContent = (STATE.manual.abasComBloco||[]).join(', ')||'—';
+    document.getElementById('manual-count').textContent = STATE.manual.totalIndicadores + ' indicadores';
+    document.getElementById('manual-updated').textContent = fmt.dateTimeBR(STATE.manual.uploadedAt);
+    renderImportSummaryManual();
+  }
+  STATE.mapping = snap.mapping || {};
+  if(snap.history) STATE.history = snap.history.map(h=>({...h, dt:new Date(h.dt)}));
+  if(STATE.involves.colaboradoresDetectados) buildMappingUI();
+  updateTopbar();
+  checkReady();
+  if(STATE.history.length){
+    const body = document.getElementById('historyBody');
+    body.innerHTML = STATE.history.map(h=>`
+      <tr><td>${fmt.dateTimeBR(h.dt)}</td><td><span class="tag-source ${h.origem==='INVOLVES'?'inv':'man'}">${h.origem}</span></td><td>${h.arquivo}</td><td>${h.registros}</td><td>${h.status}</td></tr>`).join('');
+  }
+
+  if(STATE.manual.blocks){
+    const banner = document.createElement('div');
+    banner.className = 'ok-box';
+    banner.style.marginTop = '14px';
+    banner.innerHTML = `📂 Dados restaurados automaticamente (salvos neste navegador em ${fmt.dateTimeBR(new Date(snap.savedAt))}). Se quiser atualizar com Excel novos, é só subir os arquivos de novo.`;
+    document.querySelector('#view-upload h2.section-title').after(banner);
+    runCalculation();
+    goto('upload'); // fica na tela de upload mostrando o aviso, em vez de pular direto pra Visão Geral
+  }
 }
 
 /* ================================================================
@@ -1225,6 +1323,7 @@ function runCalculation(){
 
   STATE.computed = { promoData, equipe, totalUteis, uteisDecorridos, uteisRestantes, refHoje, problems, involvesUsedRows: rowsInPeriod.length };
   renderAll();
+  saveToStorage();
   goto('overview');
 }
 
@@ -1743,6 +1842,11 @@ function openDadosImportados(){
   document.getElementById('modalBody').innerHTML = html;
   document.getElementById('modalIndiv').classList.add('active');
 }
+
+/* ================================================================
+   INICIALIZAÇÃO — tenta restaurar dados salvos no navegador
+================================================================= */
+loadFromStorage();
 
 </script>
 </body>
