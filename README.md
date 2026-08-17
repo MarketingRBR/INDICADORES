@@ -75,7 +75,61 @@ As fotos ficam embutidas no próprio `index.html` (em base64), então não há a
 
 ## Privacidade
 
-Todo o processamento acontece no navegador de quem está usando o link — os arquivos Excel enviados não passam por nenhum servidor. Os dados ficam salvos no **localStorage do navegador** (só naquele dispositivo/navegador específico), então fechar a aba ou voltar depois não apaga mais nada — a última planilha importada continua lá. Para limpar, use o botão "🗑 Limpar dados salvos" na tela de upload. Como cada navegador/dispositivo tem sua própria memória local, isso não substitui um banco de dados compartilhado: se duas pessoas acessarem o link em computadores diferentes, cada uma verá os dados que ela mesma importou.
+Todo o processamento acontece no navegador de quem está usando o link. Os dados ficam salvos no **localStorage do navegador** (só naquele dispositivo/navegador específico) como cópia local — fechar a aba ou voltar depois não apaga nada. Para limpar, use o botão "🗑 Limpar dados salvos" na tela de upload.
+
+Sem a nuvem configurada (veja abaixo), cada pessoa que abre o link só vê os dados que ela mesma importou naquele navegador — não é compartilhado com o resto da equipe.
+
+---
+
+## Compartilhar com a equipe toda (sem cada um subir Excel) — Firebase
+
+Por padrão, cada navegador guarda seus próprios dados. Para que **todo mundo veja o mesmo dashboard**, atualizado automaticamente, é preciso conectar uma nuvem compartilhada. Usamos o **Firebase** (Google), que tem plano gratuito e não exige cartão de crédito. Leva uns 5 minutos:
+
+### Passo a passo
+
+1. Acesse **https://console.firebase.google.com** e faça login com uma conta Google.
+2. Clique em **"Adicionar projeto"** → dê um nome (ex.: `rbr-trade-dashboard`) → pode desativar o Google Analytics → **Criar projeto**.
+3. No menu lateral, clique em **"Firestore Database"** → **"Criar banco de dados"**.
+   - Escolha a localização (ex.: `southamerica-east1` — São Paulo).
+   - Em "Regras de segurança", escolha **"Iniciar no modo de teste"** (permite leitura/escrita por 30 dias — depois ajustamos a regra para ficar permanente, ver abaixo).
+4. Ainda no console, clique no ícone de engrenagem (topo esquerdo) → **"Configurações do projeto"**.
+5. Role até "Seus apps" → clique no ícone **"</>"** (Web) → dê um apelido (ex.: `dashboard`) → **Registrar app**.
+6. O Firebase vai mostrar um bloco de código com um objeto `firebaseConfig` parecido com este:
+   ```js
+   const firebaseConfig = {
+     apiKey: "AIzaSy...",
+     authDomain: "rbr-trade-dashboard.firebaseapp.com",
+     projectId: "rbr-trade-dashboard",
+     storageBucket: "rbr-trade-dashboard.appspot.com",
+     messagingSenderId: "123456789",
+     appId: "1:123456789:web:abcdef123456"
+   };
+   ```
+7. Copie esses 6 valores e cole no arquivo `index.html`, procurando por `FIREBASE_CONFIG` (perto do topo do bloco `<script>`) e preenchendo cada campo entre aspas.
+8. Salve, suba o `index.html` atualizado no GitHub (substitui o antigo) e pronto — o badge "🌐" aparece no topo do dashboard confirmando a conexão.
+
+### Regra de segurança (depois dos 30 dias de teste)
+
+Em **Firestore Database → Regras**, troque pelo seguinte (permite leitura livre — necessário para a equipe ver — e escrita livre, já que é um dashboard interno sem dados sensíveis de clientes/senhas):
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rbr_dashboard/{doc} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+⚠️ Isso deixa o documento gravável por qualquer pessoa que tenha o link do dashboard (não por qualquer pessoa na internet em geral, mas tecnicamente qualquer um que inspecione o código consegue a chave). Para um dashboard interno de uma equipe pequena isso costuma ser aceitável; se quiser mais segurança (exigir login antes de publicar), é possível adicionar Firebase Authentication depois — me avise que ajudo a configurar.
+
+### Como usar depois de configurado
+
+- Quem sobe os Excel clica em **"📤 Publicar para a equipe"** depois de calcular o dashboard.
+- Qualquer pessoa que abrir o link já vê os dados publicados automaticamente — e se alguém publicar de novo enquanto a página está aberta, ela atualiza sozinha, sem precisar dar F5.
+- Sem clicar em "Publicar", os dados ficam só no seu navegador (como antes).
 
 ---
 

@@ -6,6 +6,8 @@
 <title>RBR • Central de Acompanhamento Trade Marketing</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
 :root{
   --navy:#0B2A4A;
@@ -270,6 +272,7 @@ tr:hover td{background:#FAFCFE;}
     </div>
   </div>
   <div class="topbar-right">
+    <span class="badge blue" id="cloudBadge" style="display:none;"></span>
     <div id="topbarUpdated">Involves: — &nbsp;|&nbsp; Manual: —</div>
     <div class="period-pill" id="periodPill">AGOSTO / 2026</div>
   </div>
@@ -345,12 +348,14 @@ tr:hover td{background:#FAFCFE;}
       <div id="mappingRows"></div>
     </div>
 
-    <div style="margin-top:22px; display:flex; gap:12px; align-items:center;">
+    <div style="margin-top:22px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
       <button class="btn accent" id="btnAtualizar" onclick="runCalculation()" disabled>🔄 Atualizar Dashboard</button>
       <button class="btn secondary" onclick="openDadosImportados()">🔍 Ver Dados Importados</button>
       <button class="btn secondary" onclick="clearStorage()" style="color:var(--red);border-color:#EFC1C1;">🗑 Limpar dados salvos</button>
+      <button class="btn accent" style="background:#1C8A5A;" onclick="publishToCloud()">📤 Publicar para a equipe</button>
       <span class="muted" id="calcStatus" style="font-size:12.5px;"></span>
     </div>
+    <div class="small-note" style="margin-top:8px;">"Publicar para a equipe" só funciona se a nuvem compartilhada (Firebase) estiver configurada neste dashboard — veja o README do repositório para ativar em ~5 minutos, de graça. Sem isso, cada pessoa precisa importar os Excel no próprio navegador.</div>
 
     <div id="validationSummary" style="margin-top:20px;"></div>
   </div>
@@ -895,56 +900,117 @@ function checkReady(){
 }
 
 /* ================================================================
+   NUVEM COMPARTILHADA (Firebase Firestore) — opcional.
+   Preencha FIREBASE_CONFIG com as chaves do SEU projeto Firebase (gratuito)
+   para que a equipe toda veja o mesmo dashboard, em computadores diferentes,
+   sem cada pessoa precisar subir os Excel. Instruções completas no README.
+   Se ficar em branco, o dashboard continua funcionando 100% localmente
+   (localStorage), só que sem compartilhar entre navegadores diferentes.
+================================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD-qwFw4D_T1Fl9BGv45yeWC9O01yzr-cY",
+  authDomain: "rbr-a3595.firebaseapp.com",
+  projectId: "rbr-a3595",
+  storageBucket: "rbr-a3595.firebasestorage.app",
+  messagingSenderId: "763695585455",
+  appId: "1:763695585455:web:7da8084511ae2a9a175c5a",
+};
+const CLOUD_ENABLED = !!FIREBASE_CONFIG.apiKey && !!FIREBASE_CONFIG.projectId;
+const CLOUD_DOC_PATH = ['rbr_dashboard','agosto_2026']; // coleção / documento no Firestore
+let cloudDb = null;
+let cloudUnsub = null;
+
+function initCloud(){
+  if(!CLOUD_ENABLED) return;
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    cloudDb = firebase.firestore();
+    updateCloudBadge('conectando');
+    cloudUnsub = cloudDb.collection(CLOUD_DOC_PATH[0]).doc(CLOUD_DOC_PATH[1]).onSnapshot(doc=>{
+      if(!doc.exists){ updateCloudBadge('vazio'); return; }
+      const data = doc.data();
+      // evita reprocessar o próprio snapshot que acabamos de publicar
+      if(STATE._lastPublishedAt && data.savedAt===STATE._lastPublishedAt){ updateCloudBadge('sincronizado'); return; }
+      restoreFromSnapshot(data, true);
+      updateCloudBadge('sincronizado');
+    }, err=>{
+      console.warn('Firestore onSnapshot erro:', err);
+      updateCloudBadge('erro');
+    });
+  }catch(err){
+    console.warn('Não foi possível iniciar a nuvem:', err);
+    updateCloudBadge('erro');
+  }
+}
+
+function updateCloudBadge(status){
+  const el = document.getElementById('cloudBadge');
+  if(!el) return;
+  const map = {
+    conectando: {txt:'🌐 Conectando à nuvem…', cls:'blue'},
+    sincronizado: {txt:'🌐 Sincronizado com a equipe', cls:'green'},
+    vazio: {txt:'🌐 Nuvem conectada — ninguém publicou ainda', cls:'yellow'},
+    erro: {txt:'⚠️ Erro ao conectar à nuvem — usando dados só deste navegador', cls:'red'},
+    publicando: {txt:'🌐 Publicando para a equipe…', cls:'blue'},
+  };
+  const m = map[status]||map.erro;
+  el.className = 'badge '+m.cls;
+  el.textContent = m.txt;
+  el.style.display='inline-flex';
+}
+
+async function publishToCloud(){
+  if(!CLOUD_ENABLED){ alert('A nuvem compartilhada não está configurada neste dashboard. Veja o README para ativar (Firebase gratuito).'); return; }
+  if(!STATE.manual.blocks){ alert('Importe e calcule o dashboard antes de publicar.'); return; }
+  updateCloudBadge('publicando');
+  const snapshot = buildSnapshot();
+  STATE._lastPublishedAt = snapshot.savedAt;
+  try{
+    await cloudDb.collection(CLOUD_DOC_PATH[0]).doc(CLOUD_DOC_PATH[1]).set(snapshot);
+    updateCloudBadge('sincronizado');
+    alert('Publicado! Agora quem abrir o link vê estes dados automaticamente, sem precisar subir Excel.');
+  }catch(err){
+    console.warn('Erro ao publicar:', err);
+    updateCloudBadge('erro');
+    alert('Não foi possível publicar para a nuvem. Veja o console (F12) para detalhes.');
+  }
+}
+
+/* ================================================================
    PERSISTÊNCIA LOCAL — guarda os dados no navegador (localStorage) para
    não precisar re-subir os Excel toda vez que a página é reaberta.
    Nada é enviado a nenhum servidor; fica só no dispositivo de quem acessa.
 ================================================================= */
 const STORAGE_KEY = 'rbr_trade_dashboard_v1';
 
-function saveToStorage(){
-  try{
-    const snapshot = {
-      savedAt: new Date().toISOString(),
-      involves: (STATE.involves && STATE.involves.rows) ? {
-        filename: STATE.involves.filename,
-        uploadedAt: STATE.involves.uploadedAt ? STATE.involves.uploadedAt.toISOString() : null,
-        abaUsada: STATE.involves.abaUsada,
-        abasEncontradas: STATE.involves.abasEncontradas,
-        colunasIdentificadas: STATE.involves.colunasIdentificadas,
-        colaboradoresDetectados: STATE.involves.colaboradoresDetectados,
-        rows: STATE.involves.rows.map(r=> ({...r, dataVisita: r.dataVisita ? r.dataVisita.toISOString() : null})),
-      } : null,
-      manual: (STATE.manual && STATE.manual.blocks) ? {
-        filename: STATE.manual.filename,
-        uploadedAt: STATE.manual.uploadedAt ? STATE.manual.uploadedAt.toISOString() : null,
-        abasEncontradas: STATE.manual.abasEncontradas,
-        abasComBloco: STATE.manual.abasComBloco,
-        erros: STATE.manual.erros,
-        totalIndicadores: STATE.manual.totalIndicadores,
-        blocks: STATE.manual.blocks,
-      } : null,
-      mapping: STATE.mapping,
-      history: STATE.history.map(h=>({...h, dt: h.dt.toISOString()})),
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  }catch(err){
-    console.warn('Não foi possível salvar os dados localmente:', err);
-  }
+function buildSnapshot(){
+  return {
+    savedAt: new Date().toISOString(),
+    involves: (STATE.involves && STATE.involves.rows) ? {
+      filename: STATE.involves.filename,
+      uploadedAt: STATE.involves.uploadedAt ? STATE.involves.uploadedAt.toISOString() : null,
+      abaUsada: STATE.involves.abaUsada,
+      abasEncontradas: STATE.involves.abasEncontradas,
+      colunasIdentificadas: STATE.involves.colunasIdentificadas,
+      colaboradoresDetectados: STATE.involves.colaboradoresDetectados,
+      rows: STATE.involves.rows.map(r=> ({...r, dataVisita: r.dataVisita ? r.dataVisita.toISOString() : null})),
+    } : null,
+    manual: (STATE.manual && STATE.manual.blocks) ? {
+      filename: STATE.manual.filename,
+      uploadedAt: STATE.manual.uploadedAt ? STATE.manual.uploadedAt.toISOString() : null,
+      abasEncontradas: STATE.manual.abasEncontradas,
+      abasComBloco: STATE.manual.abasComBloco,
+      erros: STATE.manual.erros,
+      totalIndicadores: STATE.manual.totalIndicadores,
+      blocks: STATE.manual.blocks,
+    } : null,
+    mapping: STATE.mapping,
+    history: STATE.history.map(h=>({...h, dt: h.dt.toISOString()})),
+  };
 }
 
-function clearStorage(){
-  if(!confirm('Isso apaga os dados salvos neste navegador (você vai precisar subir os Excel de novo). Confirmar?')) return;
-  localStorage.removeItem(STORAGE_KEY);
-  location.reload();
-}
-
-function loadFromStorage(){
-  let raw;
-  try{ raw = localStorage.getItem(STORAGE_KEY); }catch(err){ return; }
-  if(!raw) return;
-  let snap;
-  try{ snap = JSON.parse(raw); }catch(err){ return; }
-
+// Reconstrói o STATE a partir de um snapshot (vindo do localStorage OU da nuvem) e re-renderiza.
+function restoreFromSnapshot(snap, isFromCloud){
   if(snap.involves){
     STATE.involves = {
       ...snap.involves,
@@ -977,16 +1043,45 @@ function loadFromStorage(){
     body.innerHTML = STATE.history.map(h=>`
       <tr><td>${fmt.dateTimeBR(h.dt)}</td><td><span class="tag-source ${h.origem==='INVOLVES'?'inv':'man'}">${h.origem}</span></td><td>${h.arquivo}</td><td>${h.registros}</td><td>${h.status}</td></tr>`).join('');
   }
-
   if(STATE.manual.blocks){
+    const existing = document.getElementById('restoreBanner');
+    if(existing) existing.remove();
     const banner = document.createElement('div');
+    banner.id = 'restoreBanner';
     banner.className = 'ok-box';
     banner.style.marginTop = '14px';
-    banner.innerHTML = `📂 Dados restaurados automaticamente (salvos neste navegador em ${fmt.dateTimeBR(new Date(snap.savedAt))}). Se quiser atualizar com Excel novos, é só subir os arquivos de novo.`;
+    banner.innerHTML = isFromCloud
+      ? `🌐 Dashboard sincronizado com a equipe — dados publicados em ${fmt.dateTimeBR(new Date(snap.savedAt))}. Atualiza automaticamente quando alguém publicar de novo.`
+      : `📂 Dados restaurados automaticamente (salvos neste navegador em ${fmt.dateTimeBR(new Date(snap.savedAt))}). Se quiser atualizar com Excel novos, é só subir os arquivos de novo.`;
     document.querySelector('#view-upload h2.section-title').after(banner);
     runCalculation();
-    goto('upload'); // fica na tela de upload mostrando o aviso, em vez de pular direto pra Visão Geral
+    goto(isFromCloud ? 'overview' : 'upload');
   }
+}
+
+function saveToStorage(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(buildSnapshot()));
+  }catch(err){
+    console.warn('Não foi possível salvar os dados localmente:', err);
+  }
+}
+
+function clearStorage(){
+  if(!confirm('Isso apaga os dados salvos neste navegador (você vai precisar subir os Excel de novo). Confirmar?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+}
+
+function loadFromStorage(){
+  // se a nuvem estiver ativa, ela manda (onSnapshot já cuida de restaurar) — o localStorage aqui
+  // é só o fallback para quando não há nuvem configurada ou enquanto ela conecta.
+  let raw;
+  try{ raw = localStorage.getItem(STORAGE_KEY); }catch(err){ return; }
+  if(!raw) return;
+  let snap;
+  try{ snap = JSON.parse(raw); }catch(err){ return; }
+  restoreFromSnapshot(snap, false);
 }
 
 /* ================================================================
@@ -1846,7 +1941,8 @@ function openDadosImportados(){
 /* ================================================================
    INICIALIZAÇÃO — tenta restaurar dados salvos no navegador
 ================================================================= */
-loadFromStorage();
+loadFromStorage(); // restauração instantânea local, enquanto a nuvem (se configurada) conecta
+initCloud();        // se CLOUD_ENABLED, assume e mantém sincronizado em tempo real
 
 </script>
 </body>
