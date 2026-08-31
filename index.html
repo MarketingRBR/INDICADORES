@@ -274,7 +274,7 @@ tr:hover td{background:#FAFCFE;}
   <div class="topbar-right">
     <span class="badge blue" id="cloudBadge" style="display:none;"></span>
     <div id="topbarUpdated">Involves: — &nbsp;|&nbsp; Manual: —</div>
-    <div class="period-pill" id="periodPill">AGOSTO / 2026</div>
+    <select class="period-pill" id="periodSelect" onchange="switchPeriod(this.value)" style="border:1px solid rgba(255,255,255,.18); cursor:pointer;"></select>
   </div>
 </div>
 
@@ -516,11 +516,22 @@ tr:hover td{background:#FAFCFE;}
 /* ================================================================
    CONFIGURAÇÃO GERAL
 ================================================================= */
-const PERIOD = { year:2026, month:8, label:'AGOSTO/2026', start:new Date(2026,7,1), end:new Date(2026,7,31) };
+const PERIODS = {
+  '2026-08': { year:2026, month:8, label:'AGOSTO/2026', start:new Date(2026,7,1), end:new Date(2026,7,31), metasKey:'AGOSTO' },
+  '2026-09': { year:2026, month:9, label:'SETEMBRO/2026', start:new Date(2026,8,1), end:new Date(2026,8,30), metasKey:'SETEMBRO' },
+};
+let CURRENT_PERIOD_KEY = '2026-08';
+let PERIOD = { ...PERIODS[CURRENT_PERIOD_KEY] };
 const HOLIDAYS_BR = []; // feriados nacionais/estaduais no período — adicione datas 'YYYY-MM-DD' se necessário
 let CONSIDER_SATURDAY_UTIL = true; // equipe de campo costuma visitar aos sábados
 let META_TAREFAS_PCT = 0.80;   // meta mínima de Tarefas Realizadas — pode ser sobrescrita por promotor na aba METAS ('Tarefas')
 let META_ROTEIRO_PCT = 0.80;   // meta mínima de Cumprimento de Roteiro — pode ser sobrescrita por promotor na aba METAS ('Roteiro')
+
+// Total de dias úteis do mês informado explicitamente por promotor (calendário/folgas variam pessoa a pessoa).
+// Quando não há valor aqui para o período/promotor, o sistema calcula automaticamente pelo calendário (seg-sáb).
+const PROMOTER_DIAS_UTEIS = {
+  SETEMBRO: { SEVERINO:20, LUCAS:20, JORGE:20, TAYLOR:20, VANDERSON:21, FABRICIO:20 },
+};
 
 const PROMOTERS = [
   { key:'SEVERINO',   nome:'Severino Luiz',        tokens:['SEVERINO'] },
@@ -532,45 +543,83 @@ const PROMOTERS = [
 ];
 
 const DISTRIBUTOR_LISTS = {
-  SEVERINO: ['LIGPEÇA','AVANTE','PEÇA FÁCIL','ELETROPARTS','AUTO NORTE DIESEL','JS PEÇAS','VANNUCCI','VERTICAL','TANARA'],
-  LUCAS: ['BEZERRA OLIVEIRA','PELEGRINO','AUTO NORTE','RMP','JS PEÇAS','LIGPEÇA','PADRE CÍCERO','FURACÃO','GEFPEL','COBRA'],
-  JORGE: ['BEZERRA OLIVEIRA','AUTO NORTE','AUTO GIRO','MEGA GIRO','PEÇA FÁCIL','IDEAL','LIGPEÇA','ELETROPARTS','AMERICAN ATACADO','COBRA','PADRE CÍCERO'],
-  TAYLOR: ['NRD','JS PEÇAS','AUTO NORTE','LIG PEÇA','PEÇA FÁCIL','TANARA','SILVEIRA','AUTOPEÇAS MACEDO','RILDON ELETROPEÇAS','GEFPEL','BEZERRA OLIVEIRA'],
-  VANDERSON: ['MP LUB','EKKOPARTS','REAL MOTO PEÇAS','PADRE CÍCERO','EMBREPAR','MOOVEN','AUTO NORTE','ROLEMAR','JAVALI','FURACÃO','MGR'],
-  FABRICIO: [],
+  AGOSTO: {
+    SEVERINO: ['LIGPEÇA','AVANTE','PEÇA FÁCIL','ELETROPARTS','AUTO NORTE DIESEL','JS PEÇAS','VANNUCCI','VERTICAL','TANARA'],
+    LUCAS: ['BEZERRA OLIVEIRA','PELEGRINO','AUTO NORTE','RMP','JS PEÇAS','LIGPEÇA','PADRE CÍCERO','FURACÃO','GEFPEL','COBRA'],
+    JORGE: ['BEZERRA OLIVEIRA','AUTO NORTE','AUTO GIRO','MEGA GIRO','PEÇA FÁCIL','IDEAL','LIGPEÇA','ELETROPARTS','AMERICAN ATACADO','COBRA','PADRE CÍCERO'],
+    TAYLOR: ['NRD','JS PEÇAS','AUTO NORTE','LIG PEÇA','PEÇA FÁCIL','TANARA','SILVEIRA','AUTOPEÇAS MACEDO','RILDON ELETROPEÇAS','GEFPEL','BEZERRA OLIVEIRA'],
+    VANDERSON: ['MP LUB','EKKOPARTS','REAL MOTO PEÇAS','PADRE CÍCERO','EMBREPAR','MOOVEN','AUTO NORTE','ROLEMAR','JAVALI','FURACÃO','MGR'],
+    FABRICIO: [],
+  },
+  SETEMBRO: {
+    SEVERINO: ['AUTOVIA','AVANTE','AUTO NORTE DIESEL','JS PEÇAS','VANNUCCI','IMBIRIBEIRA DIESEL','REPENORTE','REDIESEL'],
+    LUCAS: ['BEZERRA OLIVEIRA','PELEGRINO','AUTO NORTE','RMP','JS PEÇAS','LIGPEÇA','PADRE CÍCERO','FURACÃO','GEFPEL','COBRA'],
+    JORGE: ['BEZERRA OLIVEIRA','AUTO NORTE','AUTO GIRO','MEGA GIRO','PEÇA FÁCIL','LIGPEÇA','ELETROPARTS','AMERICAN ATACADO','COBRA','PADRE CÍCERO'],
+    TAYLOR: ['NRD','JS PEÇAS','AUTO NORTE','LIG PEÇA','PEÇA FÁCIL','TANARA'],
+    VANDERSON: ['MP LUB','EKKOPARTS','PEÇA FÁCIL','ELETROPARTS','REAL MOTO PEÇAS','PADRE CÍCERO','EMBREPAR','MOOVEN','AUTO NORTE','ROLEMAR','JAVALI','FURACÃO','MGR'],
+    FABRICIO: [],
+  },
 };
 
-// Metas oficiais de Agosto/2026 (planilha ACOMPANHAMENTO_INDICADORES_TRADE_AGOSTO_2026.xlsx, aba AGOSTO_2026).
-// Usadas como padrão sempre que a aba METAS do Excel manual não trouxer um valor para o indicador/promotor.
-const DEFAULT_METAS_AGOSTO_2026 = {
-  SEVERINO:  { 'VISITAS + CADASTROS':119, 'DISTRIBUIDORES':9,  'ATIVACAO PDV':51, 'PALESTRAS':3,
-               'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3, 'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
-  FABRICIO:  { 'VISITAS + CADASTROS':126, 'NOVOS CADASTROS':26, 'DISTRIBUIDORES':0, 'ATIVACAO PDV':54, 'PALESTRAS':3, 'EFETIVACOES':1,
-               'PARTICIPACAO EM EVENTOS':3, 'HOMOLOGACAO LINHA PESADA':1 },
-  LUCAS:     { 'VISITAS + CADASTROS':119, 'DISTRIBUIDORES':10, 'ATIVACAO PDV':51,
-               'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10, 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3,
-               'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
-  JORGE:     { 'VISITAS + CADASTROS':119, 'DISTRIBUIDORES':10, 'ATIVACAO PDV':51,
-               'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10, 'PARTICIPACAO EM EVENTOS':1, 'SEMANA FOCO':1,
-               'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
-  TAYLOR:    { 'VISITAS + CADASTROS':147, 'DISTRIBUIDORES':11, 'ATIVACAO PDV':63,
-               'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10, 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3,
-               'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
-  VANDERSON: { 'VISITAS + CADASTROS':119, 'DISTRIBUIDORES':11, 'ATIVACAO PDV':51,
-               'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10, 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3,
-               'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+// Metas oficiais por mês. Usadas como padrão sempre que a aba METAS do Excel manual não trouxer
+// um valor para o indicador/promotor daquele período.
+const DEFAULT_METAS = {
+  AGOSTO: {
+    SEVERINO:  { 'VISITAS + CADASTROS':119, 'DISTRIBUIDORES':9,  'ATIVACAO PDV':51, 'PALESTRAS':3,
+                 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3, 'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    FABRICIO:  { 'VISITAS + CADASTROS':126, 'NOVOS CADASTROS':26, 'DISTRIBUIDORES':0, 'ATIVACAO PDV':54, 'PALESTRAS':3, 'EFETIVACOES':1,
+                 'PARTICIPACAO EM EVENTOS':3, 'HOMOLOGACAO LINHA PESADA':1 },
+    LUCAS:     { 'VISITAS + CADASTROS':119, 'DISTRIBUIDORES':10, 'ATIVACAO PDV':51,
+                 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10, 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3,
+                 'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    JORGE:     { 'VISITAS + CADASTROS':119, 'DISTRIBUIDORES':10, 'ATIVACAO PDV':51,
+                 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10, 'PARTICIPACAO EM EVENTOS':1, 'SEMANA FOCO':1,
+                 'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    TAYLOR:    { 'VISITAS + CADASTROS':147, 'DISTRIBUIDORES':11, 'ATIVACAO PDV':63,
+                 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10, 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3,
+                 'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    VANDERSON: { 'VISITAS + CADASTROS':119, 'DISTRIBUIDORES':11, 'ATIVACAO PDV':51,
+                 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10, 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3,
+                 'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+  },
+  // Metas de Setembro/2026 informadas diretamente pelo usuário.
+  SETEMBRO: {
+    SEVERINO: { 'VISITAS + CADASTROS':100, 'DISTRIBUIDORES':8, 'SEMANA FOCO':3,
+                'TREINAMENTO PROMOTOR':4, 'PALESTRAS':4,
+                'HOMOLOGACAO LINHA PESADA WEGA':1, 'HOMOLOGACAO LINHA PESADA HIPPER FREIOS':1,
+                'HOMOLOGACAO VELAS DE IGNICAO':1, 'ACOMPANHAMENTO POS HOMOLOGACAO':3 },
+    LUCAS:    { 'VISITAS + CADASTROS':105, 'DISTRIBUIDORES':10, 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10,
+                'ATIVACAO PDV':45, 'PALESTRAS':3, 'SEMANA FOCO':2,
+                'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    JORGE:    { 'VISITAS + CADASTROS':140, 'DISTRIBUIDORES':10, 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10,
+                'ATIVACAO PDV':60, 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3,
+                'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    TAYLOR:   { 'VISITAS + CADASTROS':140, 'DISTRIBUIDORES':6, 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':15,
+                'ATIVACAO PDV':60, 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3,
+                'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    VANDERSON:{ 'VISITAS + CADASTROS':147, 'DISTRIBUIDORES':13, 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10,
+                'ATIVACAO PDV':63, 'PARTICIPACAO EM EVENTOS':3, 'SEMANA FOCO':3,
+                'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    FABRICIO: { 'VISITAS + CADASTROS':105, 'NOVOS CADASTROS':15, 'ATIVACAO PDV':45, 'SEMANA FOCO':2,
+                'TREINAMENTO PROMOTOR':3, 'PALESTRAS':3, 'EFETIVACOES':1, 'HOMOLOGACAO LINHA PESADA':1 },
+  },
 };
 
-// Indicadores "extras" (Junte&Troque, Semana Foco, Eventos, Homologações) — o realizado vem da aba OUTROS INDICADORES
-// do Excel manual, casando pelo nome do indicador. Isso segue a regra de que novos indicadores podem ser adicionados
-// só preenchendo a aba Outros, sem mudar a estrutura do dashboard.
+// Indicadores "extras" (Junte&Troque, Semana Foco, Eventos, Homologações, etc.) — o realizado vem da aba
+// OUTROS INDICADORES do Excel manual, casando pelo nome do indicador, OU direto do bloco da planilha manual
+// quando o indicador já existir lá com esse nome. Isso permite adicionar indicadores novos por mês sem
+// mudar a estrutura do dashboard.
 const EXTRA_INDICATORS = [
   { key:'ABERTURA JUNTE E TROQUE', label:'Abertura Junte & Troque' },
   { key:'PAGAMENTO JUNTE E TROQUE', label:'Pagamento Junte & Troque' },
   { key:'SEMANA FOCO', label:'Semana / Dia Foco' },
   { key:'PARTICIPACAO EM EVENTOS', label:'Participação em Eventos', useEventosSheet:true },
   { key:'HOMOLOGACAO LINHA PESADA', label:'Homologação Linha Pesada' },
+  { key:'HOMOLOGACAO LINHA PESADA WEGA', label:'Homologação Linha Pesada WEGA' },
+  { key:'HOMOLOGACAO LINHA PESADA HIPPER FREIOS', label:'Homologação Linha Pesada Hipper Freios' },
   { key:'HOMOLOGACAO VELAS DE IGNICAO', label:'Homologação Velas de Ignição' },
+  { key:'ACOMPANHAMENTO POS HOMOLOGACAO', label:'Acompanhamento Pós-Homologação' },
+  { key:'TREINAMENTO PROMOTOR', label:'Bate-papo / Treinamento Técnico Promotor' },
 ];
 
 const MANUAL_SHEETS = {
@@ -633,6 +682,53 @@ document.querySelectorAll('.tab').forEach(t=>{
 function goto(view){
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.view===view));
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active', x.id==='view-'+view));
+}
+
+/* ================================================================
+   SELETOR DE PERÍODO (mês) — cada mês tem seus próprios dados salvos
+   (localStorage e nuvem), então trocar de mês não apaga o mês anterior.
+================================================================= */
+function fillPeriodSelect(){
+  const sel = document.getElementById('periodSelect');
+  sel.innerHTML = Object.keys(PERIODS).map(k=>`<option value="${k}" ${k===CURRENT_PERIOD_KEY?'selected':''}>${PERIODS[k].label}</option>`).join('');
+}
+function resetUploadUI(){
+  ['dz-involves','dz-manual','dz-semanafoco'].forEach(id=> document.getElementById(id).classList.remove('filled'));
+  document.getElementById('involves-filename').textContent='nenhum';
+  document.getElementById('involves-count').textContent='—';
+  document.getElementById('involves-colabs').textContent='—';
+  document.getElementById('involves-updated').textContent='—';
+  document.getElementById('manual-filename').textContent='nenhum';
+  document.getElementById('manual-sheets').textContent='—';
+  document.getElementById('manual-count').textContent='—';
+  document.getElementById('manual-updated').textContent='—';
+  document.getElementById('semanafoco-filename').textContent='nenhum';
+  document.getElementById('semanafoco-count').textContent='—';
+  document.getElementById('semanafoco-updated').textContent='—';
+  document.getElementById('mappingCard').style.display='none';
+  ['summaryInvolves','summaryManual','restoreBanner'].forEach(id=>{ const el=document.getElementById(id); if(el) el.remove(); });
+  document.getElementById('validationSummary').innerHTML='';
+  ['overviewContent','ritmoContent','evoContent','rankContent','alertContent'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  ['overviewEmpty','ritmoEmpty','evoEmpty','rankEmpty','alertEmpty'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='block'; });
+}
+function switchPeriod(newKey){
+  if(!PERIODS[newKey] || newKey===CURRENT_PERIOD_KEY){ CURRENT_PERIOD_KEY=newKey; }
+  if(cloudUnsub){ cloudUnsub(); cloudUnsub=null; }
+  CURRENT_PERIOD_KEY = newKey;
+  PERIOD = { ...PERIODS[newKey] };
+  STATE.involves = { raw:null, rows:null, filename:null, uploadedAt:null, colaboradoresDetectados:[] };
+  STATE.manual = { raw:null, sheets:null, filename:null, uploadedAt:null };
+  STATE.semanaFoco = { rows:null, filename:null, uploadedAt:null };
+  STATE.mapping = {};
+  STATE.computed = null;
+  STATE.history = [];
+  updateCloudBadge('conectando');
+  resetUploadUI();
+  updateTopbar();
+  checkReady();
+  loadFromStorage();
+  initCloud();
+  goto('upload');
 }
 
 /* ================================================================
@@ -975,7 +1071,7 @@ const FIREBASE_CONFIG = {
   appId: "1:763695585455:web:7da8084511ae2a9a175c5a",
 };
 const CLOUD_ENABLED = !!FIREBASE_CONFIG.apiKey && !!FIREBASE_CONFIG.projectId;
-const CLOUD_DOC_PATH = ['rbr_dashboard','agosto_2026']; // coleção / documento no Firestore
+function cloudDocPath(){ return ['rbr_dashboard', CURRENT_PERIOD_KEY.replace('-','_')]; } // coleção / documento no Firestore, um por período
 let cloudDb = null;
 let cloudUnsub = null;
 
@@ -985,7 +1081,7 @@ function initCloud(){
     firebase.initializeApp(FIREBASE_CONFIG);
     cloudDb = firebase.firestore();
     updateCloudBadge('conectando');
-    cloudUnsub = cloudDb.collection(CLOUD_DOC_PATH[0]).doc(CLOUD_DOC_PATH[1]).onSnapshot(doc=>{
+    cloudUnsub = cloudDb.collection(cloudDocPath()[0]).doc(cloudDocPath()[1]).onSnapshot(doc=>{
       if(!doc.exists){ updateCloudBadge('vazio'); return; }
       const data = doc.data();
       // evita reprocessar o próprio snapshot que acabamos de publicar
@@ -1025,7 +1121,7 @@ async function publishToCloud(){
   const snapshot = buildSnapshot();
   STATE._lastPublishedAt = snapshot.savedAt;
   try{
-    await cloudDb.collection(CLOUD_DOC_PATH[0]).doc(CLOUD_DOC_PATH[1]).set(snapshot);
+    await cloudDb.collection(cloudDocPath()[0]).doc(cloudDocPath()[1]).set(snapshot);
     updateCloudBadge('sincronizado');
     alert('Publicado! Agora quem abrir o link vê estes dados automaticamente, sem precisar subir Excel.');
   }catch(err){
@@ -1040,11 +1136,12 @@ async function publishToCloud(){
    não precisar re-subir os Excel toda vez que a página é reaberta.
    Nada é enviado a nenhum servidor; fica só no dispositivo de quem acessa.
 ================================================================= */
-const STORAGE_KEY = 'rbr_trade_dashboard_v1';
+function storageKey(){ return 'rbr_trade_dashboard_v1_'+CURRENT_PERIOD_KEY; }
 
 function buildSnapshot(){
   return {
     savedAt: new Date().toISOString(),
+    periodKey: CURRENT_PERIOD_KEY,
     involves: (STATE.involves && STATE.involves.rows) ? {
       filename: STATE.involves.filename,
       uploadedAt: STATE.involves.uploadedAt ? STATE.involves.uploadedAt.toISOString() : null,
@@ -1144,7 +1241,7 @@ function restoreFromSnapshot(snap, isFromCloud){
 
 function saveToStorage(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(buildSnapshot()));
+    localStorage.setItem(storageKey(), JSON.stringify(buildSnapshot()));
   }catch(err){
     console.warn('Não foi possível salvar os dados localmente:', err);
   }
@@ -1152,7 +1249,7 @@ function saveToStorage(){
 
 function clearStorage(){
   if(!confirm('Isso apaga os dados salvos neste navegador (você vai precisar subir os Excel de novo). Confirmar?')) return;
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(storageKey());
   location.reload();
 }
 
@@ -1160,7 +1257,7 @@ function loadFromStorage(){
   // se a nuvem estiver ativa, ela manda (onSnapshot já cuida de restaurar) — o localStorage aqui
   // é só o fallback para quando não há nuvem configurada ou enquanto ela conecta.
   let raw;
-  try{ raw = localStorage.getItem(STORAGE_KEY); }catch(err){ return; }
+  try{ raw = localStorage.getItem(storageKey()); }catch(err){ return; }
   if(!raw) return;
   let snap;
   try{ snap = JSON.parse(raw); }catch(err){ return; }
@@ -1276,11 +1373,15 @@ function matchIndicator(labelNorm, key){
     case 'ATIVACAO': return labelNorm.includes('ATIVACAO') && labelNorm.includes('PDV');
     case 'TAREFAS': return labelNorm.includes('TAREFAS');
     case 'ROTEIRO': return labelNorm.includes('ROTEIRO');
-    case 'PALESTRAS': return labelNorm.includes('BATE PAPO') || labelNorm.includes('PALESTRA');
+    case 'PALESTRAS': return labelNorm.includes('PALESTRA'); // "Palestras com o técnico da fábrica"
+    case 'TREINAMENTO_PROMOTOR': return labelNorm.includes('BATE PAPO') || (labelNorm.includes('TREINAMENTO') && labelNorm.includes('PROMOTOR'));
     case 'SEMANA_FOCO': return labelNorm.includes('SEMANA FOCO') || labelNorm.includes('DIA FOCO');
     case 'EVENTOS': return labelNorm.includes('EVENTO');
-    case 'HOMOLOG_LINHA': return labelNorm.includes('HOMOLOGACAO') && labelNorm.includes('LINHA PESADA');
+    case 'HOMOLOG_LINHA_WEGA': return labelNorm.includes('HOMOLOGACAO') && labelNorm.includes('LINHA PESADA') && labelNorm.includes('WEGA');
+    case 'HOMOLOG_LINHA_HIPPER': return labelNorm.includes('HOMOLOGACAO') && labelNorm.includes('LINHA PESADA') && labelNorm.includes('HIPPER');
+    case 'HOMOLOG_LINHA': return labelNorm.includes('HOMOLOGACAO') && labelNorm.includes('LINHA PESADA') && !labelNorm.includes('WEGA') && !labelNorm.includes('HIPPER');
     case 'HOMOLOG_VELAS': return labelNorm.includes('HOMOLOGACAO') && labelNorm.includes('VELAS');
+    case 'ACOMPANHAMENTO_POS_HOMOLOGACAO': return labelNorm.includes('ACOMPANHAMENTO') && labelNorm.includes('HOMOLOGACAO');
     case 'EFETIVACOES': return labelNorm.includes('EFETIVACAO');
     case 'JT_ABERTURA': return labelNorm.includes('ABERTURA') && labelNorm.includes('JUNTE');
     case 'JT_PAGAMENTO': return labelNorm.includes('PAGAMENTO') && labelNorm.includes('JUNTE');
@@ -1346,7 +1447,7 @@ function runCalculation(){
   const promoData = {};
   PROMOTERS.forEach(p=>{
     const rows = rowsInPeriod.filter(r=>r.promoterKey===p.key);
-    const defaults = DEFAULT_METAS_AGOSTO_2026[p.key]||{};
+    const defaults = (DEFAULT_METAS[PERIOD.metasKey]||{})[p.key]||{};
 
     // VISITAS (Involves): tipo check-in Manual ou Manual e GPS — sempre confiável, calculado diretamente do relatório
     const visitasRows = rows.filter(r=> ['MANUAL','MANUAL E GPS'].includes(normalize(r.tipoCheckin)));
@@ -1410,13 +1511,21 @@ function runCalculation(){
     const jtAbertura = simpleIndicator('JT_ABERTURA','ABERTURA JUNTE E TROQUE');
     const jtPagamento = simpleIndicator('JT_PAGAMENTO','PAGAMENTO JUNTE E TROQUE');
     const homologLinha = simpleIndicator('HOMOLOG_LINHA','HOMOLOGACAO LINHA PESADA');
+    const homologLinhaWega = simpleIndicator('HOMOLOG_LINHA_WEGA','HOMOLOGACAO LINHA PESADA WEGA');
+    const homologLinhaHipper = simpleIndicator('HOMOLOG_LINHA_HIPPER','HOMOLOGACAO LINHA PESADA HIPPER FREIOS');
     const homologVelas = simpleIndicator('HOMOLOG_VELAS','HOMOLOGACAO VELAS DE IGNICAO');
+    const acompanhamentoPosHomolog = simpleIndicator('ACOMPANHAMENTO_POS_HOMOLOGACAO','ACOMPANHAMENTO POS HOMOLOGACAO');
+    const treinamentoPromotor = simpleIndicator('TREINAMENTO_PROMOTOR','TREINAMENTO PROMOTOR');
     const extras = [
       {label:'Abertura Junte & Troque', ...jtAbertura},
       {label:'Pagamento Junte & Troque', ...jtPagamento},
       {label:'Semana / Dia Foco', ...semanaFoco},
+      {label:'Bate-papo / Treinamento Promotor', ...treinamentoPromotor},
       {label:'Homologação Linha Pesada', ...homologLinha},
+      {label:'Homologação Linha Pesada WEGA', ...homologLinhaWega},
+      {label:'Homologação Linha Pesada Hipper Freios', ...homologLinhaHipper},
       {label:'Homologação Velas de Ignição', ...homologVelas},
+      {label:'Acompanhamento Pós-Homologação', ...acompanhamentoPosHomolog},
     ].filter(ex=> ex.meta>0 || ex.realizado!==null);
 
     // TAREFAS e ROTEIRO: prefere o REALIZADO da planilha manual; se ausente, calcula a partir do Involves
@@ -1461,6 +1570,8 @@ function runCalculation(){
         // "VISITAS REALIZADAS" usa o total já recalculado (Involves + cadastros), não o REALIZADO cru da planilha
         const isVCRow = matchIndicator(labelNorm,'VC');
         const isSemanaFocoRow = matchIndicator(labelNorm,'SEMANA_FOCO');
+        // "VISITAS REALIZADAS" usa o total já recalculado (Involves + cadastros), não o REALIZADO cru da planilha —
+        // vale tanto para meta/ritmo quanto para a premiação, para todos os promotores (inclusive Fabrício).
         const realizadoEfetivo = isVCRow ? visitasCadastros : (isSemanaFocoRow ? semanaFoco.realizado : ind.realizado);
         const metaEfetiva = isVCRow ? metaVC : ind.meta;
         const calc = computeBonusRow(metaEfetiva, realizadoEfetivo, ind.bonusInfo);
@@ -1483,6 +1594,7 @@ function runCalculation(){
       ativacoes: ativacao.realizado, ativMeta: ativacao.meta,
       eventos: eventos.realizado, eventosMeta: eventos.meta,
       palestras: palestras.realizado, palestrasMeta: palestras.meta,
+      treinamentoPromotor: treinamentoPromotor.realizado, treinamentoPromotorMeta: treinamentoPromotor.meta,
       efetivacoes: efetivacoes.realizado, efetivacoesMeta: efetivacoes.meta,
       tarefasPct, roteiroPct, tarefasMeta, roteiroMeta, extras,
       diarioMap, diarioVisitasOnly,
@@ -1499,15 +1611,23 @@ function runCalculation(){
   const uteisRestantes = Math.max(totalUteis - uteisDecorridos, 0);
 
   Object.values(promoData).forEach(pd=>{
+    // total de dias úteis do mês pode variar por promotor (calendário/folgas pessoais) — usa o valor
+    // informado para o período quando existir, senão cai no cálculo padrão (mesmo para todos).
+    const overrideDias = (PROMOTER_DIAS_UTEIS[PERIOD.metasKey]||{})[pd.key];
+    const totalUteisPromotor = overrideDias || totalUteis;
+    const uteisDecorridosPromotor = Math.min(uteisDecorridos, totalUteisPromotor);
+    const uteisRestantesPromotor = Math.max(totalUteisPromotor - uteisDecorridosPromotor, 0);
+    pd.totalUteis = totalUteisPromotor; pd.uteisDecorridos = uteisDecorridosPromotor; pd.uteisRestantes = uteisRestantesPromotor;
+
     const semDado = pd.visitasCadastros===null;
-    pd.mediaAtual = (!semDado && uteisDecorridos>0) ? pd.visitasCadastros/uteisDecorridos : (semDado? null:0);
-    pd.ritmoNecessario = semDado ? null : (uteisRestantes>0 ? Math.max(pd.metaVC - pd.visitasCadastros,0)/uteisRestantes : (pd.metaVC>pd.visitasCadastros? Infinity:0));
-    pd.projecao = semDado ? null : pd.mediaAtual * totalUteis;
+    pd.mediaAtual = (!semDado && uteisDecorridosPromotor>0) ? pd.visitasCadastros/uteisDecorridosPromotor : (semDado? null:0);
+    pd.ritmoNecessario = semDado ? null : (uteisRestantesPromotor>0 ? Math.max(pd.metaVC - pd.visitasCadastros,0)/uteisRestantesPromotor : (pd.metaVC>pd.visitasCadastros? Infinity:0));
+    pd.projecao = semDado ? null : pd.mediaAtual * totalUteisPromotor;
     pd.diffMeta = semDado ? null : pd.projecao - pd.metaVC;
     pd.pctMeta = (!semDado && pd.metaVC>0) ? pd.visitasCadastros/pd.metaVC : null;
     pd.falta = semDado ? null : Math.max(pd.metaVC - pd.visitasCadastros,0);
     if(semDado) pd.status='SEM_DADO';
-    else if(pd.projecao >= pd.metaVC*1.0 && pd.mediaAtual >= (uteisRestantes>0? pd.ritmoNecessario:0)) pd.status='ACIMA';
+    else if(pd.projecao >= pd.metaVC*1.0 && pd.mediaAtual >= (uteisRestantesPromotor>0? pd.ritmoNecessario:0)) pd.status='ACIMA';
     else if(pd.pctMeta!==null && pd.pctMeta>=0.85) pd.status='DENTRO';
     else if(pd.pctMeta!==null && pd.pctMeta>=0.6) pd.status='ATENCAO';
     else pd.status='ABAIXO';
@@ -1769,11 +1889,11 @@ function renderRitmo(){
     const msg = p.status==='SEM_DADO'
       ? `<div class="ritmo-msg" style="background:var(--gray-100);color:var(--gray-700);">Sem REALIZADO apurado ainda na planilha manual, e sem arquivo do Involves para calcular a partir das visitas.</div>`
       : p.status==='ABAIXO'
-      ? `<div class="ritmo-msg" style="background:var(--red-bg);color:var(--red);">⚠️ PRECISA ACELERAR — necessário realizar ${fmt.dec(p.ritmoNecessario)} por dia nos próximos ${c.uteisRestantes} dias úteis.</div>`
+      ? `<div class="ritmo-msg" style="background:var(--red-bg);color:var(--red);">⚠️ PRECISA ACELERAR — necessário realizar ${fmt.dec(p.ritmoNecessario)} por dia nos próximos ${p.uteisRestantes} dias úteis.</div>`
       : (p.status==='ATENCAO' ? `<div class="ritmo-msg" style="background:var(--yellow-bg);color:var(--yellow);">Ritmo próximo do limite — manter ${fmt.dec(p.ritmoNecessario)} por dia para atingir a meta.</div>`
       : `<div class="ritmo-msg" style="background:var(--green-bg);color:var(--green);">No ritmo certo para atingir a meta do mês.</div>`);
     return `<div class="card ritmo-card" style="margin-bottom:12px; cursor:pointer;" onclick="openModal('${p.key}')">
-      <div class="ritmo-head"><div class="ritmo-name">${p.nome} <span class="muted" style="font-weight:500;font-size:11px;">— clique para ver detalhes</span></div>${statusPill(p.status)}</div>
+      <div class="ritmo-head"><div class="ritmo-name">${p.nome} <span class="muted" style="font-weight:500;font-size:11px;">— ${p.totalUteis} dias úteis no mês — clique para ver detalhes</span></div>${statusPill(p.status)}</div>
       <div class="progress"><div style="width:${p.pctMeta? Math.min(p.pctMeta*100,100):0}%; background:${barColor(p.pctMeta)}"></div></div>
       <div class="ritmo-grid">
         <div class="ritmo-item"><div class="l">Meta</div><div class="v">${fmt.int(p.metaVC)}</div></div>
@@ -1899,7 +2019,7 @@ function renderAlertas(){
   const proms = Object.values(c.promoData);
   const alerts = [];
   proms.forEach(p=>{
-    if(p.status==='ABAIXO') alerts.push({sev:'red', icon:'🔴', text:`<b>${p.nome}</b> está abaixo do ritmo necessário — precisa de ${fmt.dec(p.ritmoNecessario)}/dia nos ${c.uteisRestantes} dias úteis restantes para bater a meta de ${fmt.int(p.metaVC)}.`});
+    if(p.status==='ABAIXO') alerts.push({sev:'red', icon:'🔴', text:`<b>${p.nome}</b> está abaixo do ritmo necessário — precisa de ${fmt.dec(p.ritmoNecessario)}/dia nos ${p.uteisRestantes} dias úteis restantes para bater a meta de ${fmt.int(p.metaVC)}.`});
     else if(p.status==='ATENCAO') alerts.push({sev:'yellow', icon:'🟡', text:`<b>${p.nome}</b> está com ritmo próximo do limite (${fmt.pct(p.pctMeta)} da meta atingido até agora).`});
     else if(p.status==='ACIMA') alerts.push({sev:'green', icon:'🟢', text:`<b>${p.nome}</b> está acima da projeção necessária — tendência de fechar em ${fmt.int(p.projecao)} (meta ${fmt.int(p.metaVC)}).`});
     if(p.distMeta>0 && p.distVisitados>=p.distMeta) alerts.push({sev:'green', icon:'🟢', text:`<b>${p.nome}</b> atingiu a meta de visitas a distribuidores (${p.distVisitados}/${p.distMeta}).`});
@@ -1977,7 +2097,7 @@ function openModal(key){
       <div class="card money-card"><div class="money-label">Bônus Potencial</div><div class="money-big" style="color:var(--yellow);font-size:18px;">${fmt.money(p.bonusPotencial)}</div></div>
       <div class="card money-card"><div class="money-label">Total Possível</div><div class="money-big" style="font-size:18px;">${fmt.money(p.bonusTotalPossivel)}</div></div>
     </div>
-    <table style="margin-bottom:18px;">
+    <table style="margin-bottom:6px;">
       <thead><tr><th>Indicador</th><th>Meta</th><th>Realizado</th><th>%</th><th>Bônus</th><th>Status</th></tr></thead>
       <tbody>
         ${p.premiacaoIndicadores.map(x=>{
@@ -2072,6 +2192,7 @@ function openDadosImportados(){
 /* ================================================================
    INICIALIZAÇÃO — tenta restaurar dados salvos no navegador
 ================================================================= */
+fillPeriodSelect();
 loadFromStorage(); // restauração instantânea local, enquanto a nuvem (se configurada) conecta
 initCloud();        // se CLOUD_ENABLED, assume e mantém sincronizado em tempo real
 
