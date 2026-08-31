@@ -329,6 +329,21 @@ tr:hover td{background:#FAFCFE;}
           <button class="btn secondary" onclick="downloadTemplate()">⬇ Baixar modelo de Excel em branco</button>
         </div>
       </div>
+
+      <div class="card upload-card">
+        <span class="badge manual" style="margin-bottom:8px;">SEMANA FOCO • OPCIONAL</span>
+        <h3>Pesquisa de Semana Foco</h3>
+        <p class="desc">Exportação do formulário "Respostas de Pesquisas" do Involves (Semana Foco). Cada linha vira uma Semana Foco contabilizada automaticamente para o promotor (via "Notificante"), com Fábrica, Cliente e Cidade no detalhamento — sem precisar preencher isso manualmente na planilha de apuração.</p>
+        <div class="dropzone" id="dz-semanafoco" onclick="document.getElementById('file-semanafoco').click()">
+          <div class="icon">🎯</div>
+          <div class="txt">Clique para selecionar a planilha de Semana Foco</div>
+          <div class="txt2">.xlsx exportado das Pesquisas do Involves</div>
+        </div>
+        <input type="file" id="file-semanafoco" accept=".xlsx,.xls" style="display:none">
+        <div class="meta-line"><span>Arquivo carregado</span><b id="semanafoco-filename">nenhum</b></div>
+        <div class="meta-line"><span>Registros lidos</span><b id="semanafoco-count">—</b></div>
+        <div class="meta-line"><span>Última atualização</span><b id="semanafoco-updated">—</b></div>
+      </div>
     </div>
 
     <div class="card" style="padding:16px 22px; margin-top:18px; background:var(--blue-light); border-color:#C7DAF0;">
@@ -574,6 +589,7 @@ const MANUAL_SHEETS = {
 let STATE = {
   involves: { raw:null, rows:null, filename:null, uploadedAt:null, colaboradoresDetectados:[] },
   manual: { raw:null, sheets:null, filename:null, uploadedAt:null },
+  semanaFoco: { rows:null, filename:null, uploadedAt:null },
   mapping: {}, // colaboradorInvolves -> promoterKey ('' = ignorar)
   computed: null, // resultado do cálculo
   history: [],
@@ -660,6 +676,7 @@ document.getElementById('file-involves').addEventListener('change', async (e)=>{
     pesqRespondidas: numOrNull(pick(r,'Total de Pesquisas Respondidas')),
     pesqPendentes: numOrNull(pick(r,'Total de Pesquisas Pendentes')),
     estado: pick(r,'Estado'),
+    cidade: pick(r,'Cidade'),
     regional: pick(r,'Regional'),
   })).filter(r=> r.colaborador); // descarta linhas totalmente vazias
 
@@ -820,6 +837,48 @@ function renderImportSummaryManual(){
     <table><thead><tr><th>Promotor</th><th>Blocos reconhecidos</th></tr></thead><tbody>${rows}</tbody></table>
     ${s.erros.length? s.erros.map(er=>`<div class="warn-box" style="margin-top:8px;">⚠️ ${er}</div>`).join(''):''}`;
 }
+
+/* ================================================================
+   UPLOAD — SEMANA FOCO (Pesquisa do Involves)
+================================================================= */
+document.getElementById('file-semanafoco').addEventListener('change', async (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const buf = await f.arrayBuffer();
+  const wb = XLSX.read(buf, {type:'array', cellDates:true});
+  let bestRows=null, bestScore=-1;
+  wb.SheetNames.forEach(name=>{
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {defval:null});
+    if(!rows.length) return;
+    const colsNorm = Object.keys(rows[0]).map(normalize);
+    const score = ['NOTIFICANTE','NOME DA SEMANA FOCO','NOME DO CLIENTE','FABRICA'].filter(k=>colsNorm.some(c=>c.includes(k))).length;
+    if(score>bestScore){ bestScore=score; bestRows=rows; }
+  });
+  if(!bestRows || bestScore<2){
+    alert('Não foi possível identificar as colunas esperadas (Notificante, Nome da Semana Foco, Nome do Cliente, Fábrica) neste arquivo. Confira se é a exportação correta da pesquisa de Semana Foco.');
+    return;
+  }
+  const colMap={}; Object.keys(bestRows[0]).forEach(c=>colMap[normalize(c)]=c);
+  const pick=(row,...names)=>{ for(const n of names){ const k=Object.keys(colMap).find(nk=>nk.includes(normalize(n))); if(k!==undefined){ const orig=colMap[k]; if(row[orig]!==undefined) return row[orig]; } } return null; };
+  const parsed = bestRows.map(r=>({
+    notificante: pick(r,'Notificante'),
+    dataHora: toDate(pick(r,'Data e hora da pesquisa')),
+    nomeAcao: pick(r,'NOME DA SEMANA FOCO'),
+    cliente: pick(r,'NOME DO CLIENTE'),
+    fabrica: pick(r,'FÁBRICA','FABRICA'),
+    dataInicio: toDate(pick(r,'DATA DE INÍCIO DA AÇÃO','DATA DE INICIO DA ACAO')),
+    dataFim: toDate(pick(r,'DATA DE TÉRMINO DA AÇÃO','DATA DE TERMINO DA ACAO')),
+    meta: pick(r,'META DA CAMPANHA'),
+    tipoMeta: pick(r,'TIPO DE META'),
+  })).filter(r=>r.notificante);
+
+  STATE.semanaFoco = { rows: parsed, filename: f.name, uploadedAt: new Date() };
+  document.getElementById('dz-semanafoco').classList.add('filled');
+  document.getElementById('semanafoco-filename').textContent = f.name;
+  document.getElementById('semanafoco-count').textContent = parsed.length + ' registro(s)';
+  document.getElementById('semanafoco-updated').textContent = fmt.dateTimeBR(STATE.semanaFoco.uploadedAt);
+  addHistory('SEMANA FOCO', f.name, parsed.length, 'Pesquisa de Semana Foco processada');
+  saveToStorage();
+});
 
 function toDate(v){
   if(!v) return null;
@@ -1004,6 +1063,15 @@ function buildSnapshot(){
       totalIndicadores: STATE.manual.totalIndicadores,
       blocks: STATE.manual.blocks,
     } : null,
+    semanaFoco: (STATE.semanaFoco && STATE.semanaFoco.rows) ? {
+      filename: STATE.semanaFoco.filename,
+      uploadedAt: STATE.semanaFoco.uploadedAt ? STATE.semanaFoco.uploadedAt.toISOString() : null,
+      rows: STATE.semanaFoco.rows.map(r=> ({...r,
+        dataHora: r.dataHora ? r.dataHora.toISOString() : null,
+        dataInicio: r.dataInicio ? r.dataInicio.toISOString() : null,
+        dataFim: r.dataFim ? r.dataFim.toISOString() : null,
+      })),
+    } : null,
     mapping: STATE.mapping,
     history: STATE.history.map(h=>({...h, dt: h.dt.toISOString()})),
   };
@@ -1032,6 +1100,21 @@ function restoreFromSnapshot(snap, isFromCloud){
     document.getElementById('manual-count').textContent = STATE.manual.totalIndicadores + ' indicadores';
     document.getElementById('manual-updated').textContent = fmt.dateTimeBR(STATE.manual.uploadedAt);
     renderImportSummaryManual();
+  }
+  if(snap.semanaFoco){
+    STATE.semanaFoco = {
+      filename: snap.semanaFoco.filename,
+      uploadedAt: snap.semanaFoco.uploadedAt ? new Date(snap.semanaFoco.uploadedAt) : null,
+      rows: snap.semanaFoco.rows.map(r=> ({...r,
+        dataHora: r.dataHora ? new Date(r.dataHora) : null,
+        dataInicio: r.dataInicio ? new Date(r.dataInicio) : null,
+        dataFim: r.dataFim ? new Date(r.dataFim) : null,
+      })),
+    };
+    document.getElementById('dz-semanafoco').classList.add('filled');
+    document.getElementById('semanafoco-filename').textContent = STATE.semanaFoco.filename;
+    document.getElementById('semanafoco-count').textContent = STATE.semanaFoco.rows.length + ' registro(s)';
+    document.getElementById('semanafoco-updated').textContent = fmt.dateTimeBR(STATE.semanaFoco.uploadedAt);
   }
   STATE.mapping = snap.mapping || {};
   if(snap.history) STATE.history = snap.history.map(h=>({...h, dt:new Date(h.dt)}));
@@ -1243,6 +1326,23 @@ function runCalculation(){
 
   const rowsInPeriod = involvesRows.filter(r=> r.dataVisita && r.dataVisita>=PERIOD.start && r.dataVisita<=PERIOD.end);
 
+  // lookup PDV (nome do cliente) -> cidade/estado, construído a partir do relatório do Involves (se disponível)
+  const cidadeLookup = {};
+  involvesRows.forEach(r=>{
+    if(r.pdv && r.cidade){ cidadeLookup[normalize(r.pdv)] = { cidade:r.cidade, estado:r.estado }; }
+  });
+  function lookupCidade(nomeCliente){
+    if(!nomeCliente) return null;
+    const key = normalize(nomeCliente);
+    if(cidadeLookup[key]) return cidadeLookup[key];
+    // tenta casar por inclusão (nomes que não batem 100% mas um contém o outro)
+    const found = Object.keys(cidadeLookup).find(k=> k.includes(key) || key.includes(k));
+    return found ? cidadeLookup[found] : null;
+  }
+  if(STATE.semanaFoco && STATE.semanaFoco.rows && !involvesRows.length){
+    problems.avisos.push('Arquivo Involves não importado — o detalhamento de Semana Foco vai mostrar Fábrica/Cliente, mas a Cidade fica indisponível (vem do cruzamento com o Involves).');
+  }
+
   const promoData = {};
   PROMOTERS.forEach(p=>{
     const rows = rowsInPeriod.filter(r=>r.promoterKey===p.key);
@@ -1292,6 +1392,21 @@ function runCalculation(){
     const eventos = simpleIndicator('EVENTOS','PARTICIPACAO EM EVENTOS');
     const efetivacoes = simpleIndicator('EFETIVACOES','EFETIVACOES');
     const semanaFoco = simpleIndicator('SEMANA_FOCO','SEMANA FOCO');
+    // se a planilha de Semana Foco (pesquisa do Involves) foi importada, ela manda no REALIZADO —
+    // é a fonte automática; o valor da planilha manual só é usado se este arquivo não foi enviado.
+    let semanaFocoDetalhe = [];
+    if(STATE.semanaFoco && STATE.semanaFoco.rows){
+      const linhasDoPromotor = STATE.semanaFoco.rows.filter(r=> guessPromoter(r.notificante)===p.key);
+      semanaFoco.realizado = linhasDoPromotor.length;
+      semanaFocoDetalhe = linhasDoPromotor.map(r=>{
+        const loc = lookupCidade(r.cliente);
+        return {
+          fabrica: r.fabrica, cliente: r.cliente,
+          cidade: loc ? loc.cidade : null, estado: loc ? loc.estado : null,
+          nomeAcao: r.nomeAcao, dataInicio: r.dataInicio, dataFim: r.dataFim, data: r.dataHora,
+        };
+      });
+    }
     const jtAbertura = simpleIndicator('JT_ABERTURA','ABERTURA JUNTE E TROQUE');
     const jtPagamento = simpleIndicator('JT_PAGAMENTO','PAGAMENTO JUNTE E TROQUE');
     const homologLinha = simpleIndicator('HOMOLOG_LINHA','HOMOLOGACAO LINHA PESADA');
@@ -1345,7 +1460,8 @@ function runCalculation(){
         const labelNorm = normalize(ind.rawLabel);
         // "VISITAS REALIZADAS" usa o total já recalculado (Involves + cadastros), não o REALIZADO cru da planilha
         const isVCRow = matchIndicator(labelNorm,'VC');
-        const realizadoEfetivo = isVCRow ? visitasCadastros : ind.realizado;
+        const isSemanaFocoRow = matchIndicator(labelNorm,'SEMANA_FOCO');
+        const realizadoEfetivo = isVCRow ? visitasCadastros : (isSemanaFocoRow ? semanaFoco.realizado : ind.realizado);
         const metaEfetiva = isVCRow ? metaVC : ind.meta;
         const calc = computeBonusRow(metaEfetiva, realizadoEfetivo, ind.bonusInfo);
         premiacaoIndicadores.push({ label:ind.rawLabel, meta:metaEfetiva, realizado:realizadoEfetivo, bonusInfo:ind.bonusInfo, ...calc });
@@ -1371,6 +1487,7 @@ function runCalculation(){
       tarefasPct, roteiroPct, tarefasMeta, roteiroMeta, extras,
       diarioMap, diarioVisitasOnly,
       premiacaoIndicadores, bonusAcumulado, bonusPotencial, bonusTotalPossivel, indicadoresAtingidos, indicadoresPendentes,
+      semanaFocoDetalhe,
     };
   });
 
@@ -1895,7 +2012,21 @@ function openModal(key){
           </tr>`;
         }).join('')}
       </tbody>
-    </table>`;
+    </table>
+    ${p.semanaFocoDetalhe && p.semanaFocoDetalhe.length ? `
+    <h3 style="font-size:13px;color:var(--navy);margin:18px 0 8px;">🎯 Semana Foco — Detalhamento (${p.semanaFocoDetalhe.length})</h3>
+    <table>
+      <thead><tr><th>Fábrica</th><th>Cliente</th><th>Cidade</th><th>Ação</th><th>Período</th></tr></thead>
+      <tbody>
+        ${p.semanaFocoDetalhe.map(d=>`<tr>
+          <td>${d.fabrica||'—'}</td>
+          <td>${d.cliente||'—'}</td>
+          <td>${d.cidade? d.cidade+(d.estado?'/'+d.estado:'') : '<span class="muted">não identificada</span>'}</td>
+          <td>${d.nomeAcao||'—'}</td>
+          <td>${d.dataInicio?fmt.dateBR(d.dataInicio):'—'} a ${d.dataFim?fmt.dateBR(d.dataFim):'—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : ''}`;
   document.getElementById('modalIndiv').classList.add('active');
 }
 function closeModal(){ document.getElementById('modalIndiv').classList.remove('active'); }

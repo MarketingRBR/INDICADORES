@@ -44,6 +44,7 @@ Nada é digitado dentro do dashboard. O Excel é a fonte oficial; o dashboard é
   - Fórmula por unidade (ex.: `=E20*300`) → paga realizado × valor unitário, sem depender de bater meta.
 - **Ranking**: por % de meta atingida, por bônus acumulado ou por ritmo — nunca só por volume bruto.
 - **Alertas gerenciais**: quem está abaixo do ritmo, quem está perto de liberar um novo bônus, etc. — gerados automaticamente.
+- **Semana Foco (automático)**: se você subir a exportação da pesquisa "Semana Foco" do Involves (terceiro upload, opcional), o REALIZADO desse indicador é contado automaticamente por promotor (via campo "Notificante"), com detalhamento de Fábrica / Cliente / Cidade na página individual — a Cidade vem do cruzamento com o relatório do Involves. Sem esse arquivo, o indicador continua funcionando normalmente com o valor da planilha manual.
 
 **Regra de ouro:** se um valor não foi apurado (célula vazia na planilha), o dashboard mostra "—" / "aguardando apuração" — nunca transforma em zero.
 
