@@ -1,6 +1,6 @@
 # RBR Trade Marketing — Central de Acompanhamento
 
-Dashboard de BI para acompanhamento da equipe de Trade Marketing da RBR Representações (Agosto/2026). Roda 100% no navegador — sem backend, sem banco de dados. Todos os dados vêm de dois arquivos Excel que você mesmo já usa no dia a dia.
+Dashboard de BI para acompanhamento da equipe de Trade Marketing da RBR Representações, mês a mês (Agosto, Setembro, Outubro/2026...). Roda 100% no navegador — sem backend, sem banco de dados próprio. Todos os dados vêm dos arquivos Excel que você já usa no dia a dia.
 
 🔗 **Acesse:** `https://SEU-USUARIO.github.io/NOME-DO-REPO/`
 
@@ -9,7 +9,9 @@ Dashboard de BI para acompanhamento da equipe de Trade Marketing da RBR Represen
 ## Como funciona
 
 ```
-Excel do Involves (relatório gerencial de visitas)
+Tela de escolha do mês (Agosto / Setembro / Outubro...)
+            ↓
+Excel do Involves (relatório gerencial de visitas) — opcional
 Excel manual (indicadores, metas, bônus)
             ↓
       Upload no dashboard
@@ -25,13 +27,22 @@ Nada é digitado dentro do dashboard. O Excel é a fonte oficial; o dashboard é
 
 ## Passo a passo de uso
 
-1. Abra o link do site.
-2. Na aba **"📥 Atualização dos Dados"**:
+1. Abra o link do site — a primeira tela pede pra você **escolher o mês**. Cada mês guarda seus próprios dados (local e, se configurado, na nuvem), então trocar de mês nunca apaga o anterior. Um selo "✓ Dados salvos" aparece nos meses que já têm algo importado.
+2. Depois de escolher o mês, na aba **"📥 Atualização dos Dados"**:
    - Envie o **relatório do Involves** (opcional — sem ele, alguns indicadores calculados automaticamente ficam indisponíveis, mas o dashboard funciona só com a planilha manual).
-   - Envie a **planilha manual de acompanhamento** (obrigatória — é dela que vêm metas, realizado e bônus).
-3. Confira a **Conferência de Colaboradores**, que tenta casar automaticamente os nomes do Involves com os 6 promotores da equipe.
+   - Envie a **planilha manual de acompanhamento daquele mês** (obrigatória — é dela que vêm metas, realizado e bônus).
+3. Confira a **Conferência de Colaboradores**, que tenta casar automaticamente os nomes do Involves com os promotores da equipe.
 4. Clique em **"🔄 Atualizar Dashboard"**.
 5. Use **"🔍 Ver Dados Importados"** a qualquer momento para auditar exatamente o que o sistema leu de cada arquivo.
+6. Pra trocar de mês depois, use o seletor no topo ou o botão **"🏠 Trocar mês"**, que volta pra tela inicial.
+
+### Metas e indicadores variam por mês
+
+Agosto e Setembro/2026 já vêm com as metas oficiais pré-carregadas (usadas como padrão sempre que a planilha manual não trouxer um valor). Outubro em diante começa **zerado de propósito** — o dashboard não inventa meta nenhuma; tudo vem da aba METAS do Excel daquele mês. Setembro introduziu indicadores que não existiam em Agosto (Bate-papo/Treinamento Promotor separado de Palestras com o Técnico, Homologação Linha Pesada por fábrica específica, Acompanhamento Pós-Homologação) — o sistema reconhece esses nomes automaticamente, não precisa configurar nada.
+
+### Promotores da equipe
+
+Severino, Fabrício, Lucas, Jorge, Taylor, Vanderson e Juliana (com metas), mais Alexandre e a Promotora de Merchandising (sem metas: aparecem com foto e visitas, mas ficam fora dos totais da equipe, do ranking e dos alertas). Se o nome da Promotora de Merchandising no Involves não contiver a palavra "merchandising", vincule-a manualmente na Conferência de Colaboradores. Para que o reconhecimento automático de nomes funcione (tanto no relatório do Involves quanto na planilha manual), o primeiro nome de cada um precisa aparecer em algum lugar do campo "Colaborador"/"Notificante"/"Promotor" do arquivo.
 
 ---
 
