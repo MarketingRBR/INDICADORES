@@ -137,6 +137,10 @@ service cloud.firestore {
 
 ⚠️ Isso deixa o documento gravável por qualquer pessoa que tenha o link do dashboard (não por qualquer pessoa na internet em geral, mas tecnicamente qualquer um que inspecione o código consegue a chave). Para um dashboard interno de uma equipe pequena isso costuma ser aceitável; se quiser mais segurança (exigir login antes de publicar), é possível adicionar Firebase Authentication depois — me avise que ajudo a configurar.
 
+### Se aparecer "⚠️ Erro ao conectar à nuvem"
+
+O selo agora mostra o código do erro entre parênteses (passe o mouse para ver a explicação). O caso mais comum é `permission-denied`: o "modo de teste" do Firestore **expira em 30 dias** e passa a bloquear tudo. Para corrigir, no console do Firebase vá em **Firestore Database → Regras**, cole as regras da seção acima e clique em **Publicar**. Se o código for `failed-precondition` ou `not-found`, o banco Firestore ainda não foi criado no projeto.
+
 ### Como usar depois de configurado
 
 - Quem sobe os Excel clica em **"📤 Publicar para a equipe"** depois de calcular o dashboard.

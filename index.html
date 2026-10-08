@@ -1204,7 +1204,7 @@ function initCloud(){
       updateCloudBadge('sincronizado');
     }, err=>{
       console.warn('Firestore onSnapshot erro:', err);
-      updateCloudBadge('erro');
+      updateCloudBadge('erro', err && err.code);
     });
   }catch(err){
     console.warn('Não foi possível iniciar a nuvem:', err);
@@ -1212,7 +1212,7 @@ function initCloud(){
   }
 }
 
-function updateCloudBadge(status){
+function updateCloudBadge(status, code){
   const el = document.getElementById('cloudBadge');
   if(!el) return;
   const map = {
@@ -1223,8 +1223,17 @@ function updateCloudBadge(status){
     publicando: {txt:'🌐 Publicando para a equipe…', cls:'blue'},
   };
   const m = map[status]||map.erro;
+  const motivos = {
+    'permission-denied': 'Permissão negada: as regras do Firestore estão bloqueando (o modo de teste expira em 30 dias). Atualize as regras no console do Firebase.',
+    'unavailable': 'Sem conexão com o Firebase (internet ou bloqueio de rede).',
+    'failed-precondition': 'Banco Firestore ainda não foi criado neste projeto.',
+    'not-found': 'Banco Firestore ainda não foi criado neste projeto.',
+    'unauthenticated': 'Chave de API inválida.',
+  };
   el.className = 'badge '+m.cls;
   el.textContent = m.txt;
+  el.title = (status==='erro' && code) ? ((motivos[code]||'Erro do Firebase')+' ['+code+']') : '';
+  if(status==='erro' && code) el.textContent = m.txt + ' (' + code + ')';
   el.style.display='inline-flex';
 }
 
@@ -1240,8 +1249,9 @@ async function publishToCloud(){
     alert('Publicado! Agora quem abrir o link vê estes dados automaticamente, sem precisar subir Excel.');
   }catch(err){
     console.warn('Erro ao publicar:', err);
-    updateCloudBadge('erro');
-    alert('Não foi possível publicar para a nuvem. Veja o console (F12) para detalhes.');
+    updateCloudBadge('erro', err && err.code);
+    const motivos2 = {'permission-denied':'As regras do Firestore estão bloqueando a gravação (modo de teste expirado?). Atualize as regras no console do Firebase.','unavailable':'Sem conexão com o Firebase.','failed-precondition':'O banco Firestore ainda não foi criado.','not-found':'O banco Firestore ainda não foi criado.'};
+    alert('Não foi possível publicar para a nuvem.\n\n'+(motivos2[err&&err.code]||'Veja o console (F12) para detalhes.')+(err&&err.code?'\n\nCódigo: '+err.code:''));
   }
 }
 
