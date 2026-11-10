@@ -38,7 +38,7 @@ Nada é digitado dentro do dashboard. O Excel é a fonte oficial; o dashboard é
 
 ### Metas e indicadores variam por mês
 
-Agosto e Setembro/2026 já vêm com as metas oficiais pré-carregadas (usadas como padrão sempre que a planilha manual não trouxer um valor). Outubro em diante começa **zerado de propósito** — o dashboard não inventa meta nenhuma; tudo vem da aba METAS do Excel daquele mês. Setembro introduziu indicadores que não existiam em Agosto (Bate-papo/Treinamento Promotor separado de Palestras com o Técnico, Homologação Linha Pesada por fábrica específica, Acompanhamento Pós-Homologação) — o sistema reconhece esses nomes automaticamente, não precisa configurar nada.
+Agosto, Setembro, Outubro e Novembro/2026 já vêm com as metas oficiais pré-carregadas (usadas como padrão sempre que a planilha manual não trouxer um valor). Meses ainda não cadastrados no código (Dezembro em diante) começam **sem metas de propósito** — o dashboard não inventa meta nenhuma; tudo vem da aba METAS do Excel daquele mês. Setembro introduziu indicadores que não existiam em Agosto (Bate-papo/Treinamento Promotor separado de Palestras com o Técnico, Homologação Linha Pesada por fábrica específica, Acompanhamento Pós-Homologação) — o sistema reconhece esses nomes automaticamente, não precisa configurar nada.
 
 ### Promotores da equipe
 

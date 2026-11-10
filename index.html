@@ -388,7 +388,7 @@ tr:hover td{background:#FAFCFE;}
     <div class="card" style="padding:16px 22px; margin-top:18px; background:var(--blue-light); border-color:#C7DAF0;">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
         <div>
-          <div style="font-weight:800; font-size:13px; color:var(--navy);">✓ Metas oficiais de Agosto/2026 já carregadas no sistema</div>
+          <div style="font-weight:800; font-size:13px; color:var(--navy);">✓ Metas oficiais de <span class="periodLabelText">o mês</span> já carregadas no sistema</div>
           <div style="font-size:11.5px; color:var(--gray-700); margin-top:3px;">Visitas + Cadastros, Distribuidores e Ativação de PDV de todos os promotores já vêm pré-preenchidos. Se sua aba <b>METAS</b> do Excel manual tiver um valor para o mesmo indicador/promotor, ele substitui o padrão automaticamente.</div>
         </div>
         <button class="btn secondary" onclick="toggleMetasPadrao()" id="btnVerMetas">Ver metas cadastradas</button>
@@ -559,6 +559,7 @@ const PERIODS = {
   '2026-08': { year:2026, month:8, label:'AGOSTO/2026', start:new Date(2026,7,1), end:new Date(2026,7,31), metasKey:'AGOSTO' },
   '2026-09': { year:2026, month:9, label:'SETEMBRO/2026', start:new Date(2026,8,1), end:new Date(2026,8,30), metasKey:'SETEMBRO' },
   '2026-10': { year:2026, month:10, label:'OUTUBRO/2026', start:new Date(2026,9,1), end:new Date(2026,9,31), metasKey:'OUTUBRO' },
+  '2026-11': { year:2026, month:11, label:'NOVEMBRO/2026', start:new Date(2026,10,1), end:new Date(2026,10,30), metasKey:'NOVEMBRO' },
 };
 let CURRENT_PERIOD_KEY = null; // null = mostra a tela de escolha de mês antes de abrir o dashboard
 let PERIOD = { ...PERIODS['2026-08'] }; // valor inicial neutro — só passa a valer de verdade após escolher o mês na tela inicial
@@ -572,6 +573,7 @@ let META_ROTEIRO_PCT = 0.80;   // meta mínima de Cumprimento de Roteiro — pod
 const PROMOTER_DIAS_UTEIS = {
   SETEMBRO: { SEVERINO:20, LUCAS:20, JORGE:20, TAYLOR:20, VANDERSON:21, FABRICIO:20 },
   OUTUBRO:  { SEVERINO:19, LUCAS:20, JORGE:20, TAYLOR:21, FABRICIO:20, VANDERSON:16, JULIANA:21 },
+  NOVEMBRO: { SEVERINO:19, LUCAS:19, JORGE:19, TAYLOR:19, FABRICIO:19, VANDERSON:19, JULIANA:19 },
 };
 
 const PROMOTERS = [
@@ -614,6 +616,14 @@ const DISTRIBUTOR_LISTS = {
     VANDERSON: ['MP LUB','EKKOPARTS','PEÇA FÁCIL','ELETROPARTS','REAL MOTO PEÇAS','PADRE CÍCERO','EMBREPAR','MOOVEN','AUTO NORTE','ROLEMAR','JAVALI','FURACÃO','MGR'],
     FABRICIO: [],
     JULIANA: [],
+  },  NOVEMBRO: {
+    SEVERINO: ['AUTOVIA','AVANTE','AUTO NORTE DIESEL','JS PEÇAS','VANNUCCI','IMBIRIBEIRA DIESEL','REPENORTE','REDIESEL'],
+    LUCAS: ['BEZERRA OLIVEIRA','PELEGRINO','AUTO NORTE','RMP','JS PEÇAS','LIGPEÇA','PADRE CÍCERO','FURACÃO','GEFPEL','COBRA'],
+    JORGE: ['BEZERRA OLIVEIRA','AUTO NORTE','AUTO GIRO','MEGA GIRO','PEÇA FÁCIL','LIGPEÇA','ELETROPARTS','AMERICAN ATACADO','COBRA','PADRE CÍCERO'],
+    TAYLOR: ['NRD','JS PEÇAS','AUTO NORTE','LIG PEÇA','PEÇA FÁCIL','TANARA'],
+    VANDERSON: ['MP LUB','EKKOPARTS','PEÇA FÁCIL','ELETROPARTS','REAL MOTO PEÇAS','PADRE CÍCERO','EMBREPAR','MOOVEN','AUTO NORTE','ROLEMAR','JAVALI','FURACÃO','MGR'],
+    FABRICIO: ['O VAREJÃO','RONI','VASCO IMPORTS','BEZERRA OLIVEIRA','AUTO NORTE','ROLEMAR','REAL MOTO PEÇAS','EMBREPAR','FURACÃO','COBRA','COMDIP','PELLEGRINO','ROLES','SAMA'],
+    JULIANA: ['LIGPEÇA','AUTO NORTE','BEZERRA OLIVEIRA','MEGGA','RILDON','SILVEIRA','MÂCEDO'],
   },
 };
 
@@ -681,6 +691,29 @@ const DEFAULT_METAS = {
                 'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
     JULIANA:  { 'VISITAS + CADASTROS':147, 'NOVOS CADASTROS':40, 'ATIVACAO PDV':63, 'PARTICIPACAO EM EVENTOS':3,
                 'SEMANA FOCO':3, 'EFETIVACOES':1, 'HOMOLOGACAO LINHA PESADA HIPPER FREIOS':1 },
+    ALEXANDRE: {}, MERCHANDISING: {},
+  },
+  // Metas de Novembro/2026 informadas diretamente pelo usuário.
+  NOVEMBRO: {
+    SEVERINO: { 'VISITAS + CADASTROS':95, 'DISTRIBUIDORES':8, 'TREINAMENTO PROMOTOR':3, 'PARTICIPACAO EM EVENTOS':3,
+                'HOMOLOGACAO LINHA PESADA WEGA':1, 'HOMOLOGACAO LINHA PESADA HIPPER FREIOS':1,
+                'HOMOLOGACAO VELAS DE IGNICAO':1, 'ACOMPANHAMENTO POS HOMOLOGACAO':3 },
+    LUCAS:    { 'VISITAS + CADASTROS':133, 'DISTRIBUIDORES':10, 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10,
+                'ATIVACAO PDV':57, 'PARTICIPACAO EM EVENTOS':2, 'SEMANA FOCO':2,
+                'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    JORGE:    { 'VISITAS + CADASTROS':100, 'DISTRIBUIDORES':10, 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10,
+                'ATIVACAO PDV':42, 'PALESTRAS':3, 'SEMANA FOCO':2,
+                'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    TAYLOR:   { 'VISITAS + CADASTROS':133, 'DISTRIBUIDORES':6, 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10,
+                'ATIVACAO PDV':57, 'PARTICIPACAO EM EVENTOS':2, 'SEMANA FOCO':2,
+                'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    FABRICIO: { 'VISITAS + CADASTROS':100, 'DISTRIBUIDORES':14, 'NOVOS CADASTROS':28, 'ATIVACAO PDV':42, 'TREINAMENTO PROMOTOR':2,
+                'SEMANA FOCO':2, 'PALESTRAS':1, 'EFETIVACOES':1, 'HOMOLOGACAO LINHA PESADA':1 },
+    VANDERSON:{ 'VISITAS + CADASTROS':133, 'DISTRIBUIDORES':13, 'ABERTURA JUNTE E TROQUE':10, 'PAGAMENTO JUNTE E TROQUE':10,
+                'ATIVACAO PDV':57, 'PARTICIPACAO EM EVENTOS':2, 'SEMANA FOCO':2,
+                'HOMOLOGACAO LINHA PESADA':1, 'HOMOLOGACAO VELAS DE IGNICAO':1 },
+    JULIANA:  { 'VISITAS + CADASTROS':100, 'DISTRIBUIDORES':7, 'NOVOS CADASTROS':28, 'ATIVACAO PDV':42, 'PALESTRAS':3,
+                'SEMANA FOCO':2, 'EFETIVACOES':1, 'HOMOLOGACAO LINHA PESADA HIPPER FREIOS':1 },
     ALEXANDRE: {}, MERCHANDISING: {},
   },
 };
@@ -830,6 +863,7 @@ function switchPeriod(newKey){
   CURRENT_PERIOD_KEY = newKey;
   PERIOD = { ...PERIODS[newKey] };
   const selEl = document.getElementById('periodSelect'); if(selEl) selEl.value = newKey;
+  document.querySelectorAll('.periodLabelText').forEach(el=> el.textContent = PERIOD.label.charAt(0)+PERIOD.label.slice(1).toLowerCase());
   STATE.involves = { raw:null, rows:null, filename:null, uploadedAt:null, colaboradoresDetectados:[] };
   STATE.manual = { raw:null, sheets:null, filename:null, uploadedAt:null };
   STATE.semanaFoco = { rows:null, filename:null, uploadedAt:null };
